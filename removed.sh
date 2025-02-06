@@ -1,10 +1,13 @@
 #!/bin/env bash
 
-usage ()
+
+_usage()
 {
 	msg="\
- usage: removed base-dir(file) second-dir(file) ..
-  first argument is the file/folder that you want to keep. rest will get deleted If they matched the sum of the file(s) in the first argument. empty files are ignored.
+ usage: removed base-dir(file) second-dir(file) more-dir(file)
+  first argument is the file/folder that you want to keep.\
+ rest will get deleted If they matched the sum of the file(s) in the first argument.\
+ empty files are ignored. Pass the word 'test' for generating a test files.
 "
 
 echo -ne "$msg"
@@ -12,62 +15,68 @@ exit 0
 
 }
 
-config ()
+_config()
 {
+
 	if [ -z "$1" ]; then
-		usage
+		_usage
+	else
+		[[ "$@" = *"test"* ]] && _test
+		_sum "$@"
+		_stats
 	fi
+
 }
 
-sum ()
+
+_sum()
 {
-		tc="0"
-		ta="0"
-		tr="0"
-		tf="0"
+
+		tc="0"; ta="0"
+		tr="0"; tf="0"
 		echo "making:" ~/removed.sum
 		echo "">~/removed.sum
-		echo "target: $@\n">>~/removed.log
+		[ ! -f ~/removed.sum ] && { echo "failed creating the state file:" ~/removed.sum; exit 1; }
+		echo -e "date: $(date) targets: $@">>~/removed.log
 	while read x; do
 		if [ -s "$x" ]; then
 				echo -ne "checking: '$x'\n"
-				r="$(md5sum "$x")"
-				tc=$((tc+1))
-				h="$(printf "$r" | awk '{print $1}')"
-				m="$(grep -cm1 "$h" ~/removed.sum)"
-			if [ "$m" = "1" ]; then
-				f="$(grep "$h" ~/removed.sum | awk '{$1=""; print}')"
-			else
-				m="0"
-			fi
-			if [ "$m" = "0" ]; then
-				echo -ne "adding: '$x'\n"
-				echo "$r">>~/removed.sum
-				ta=$((ta+1))
-			elif [ "$m" = "1" ]; then
-				echo -ne "removing: '$x' because matches with: '$f'\n"
-				echo -ne "removing: '$x' because matches with: '$f'\n">>~/removed.log
+				h=($(md5sum "$x")); tc=$((tc+1))
+				d=($(grep -Fm1 "${h[0]}" ~/removed.sum))
+			if [ -n "$d" ]; then
+				echo -e "removing: '$x'(${h[0]}) because matches with: '${d[@]:1}'(${d[0]})"
+				echo -e "removing: '$x'(${h[0]}) because matches with: '${d[@]:1}'(${d[0]})">>~/removed.log
 				rm "$x" >>~/removed.log 2>&1
-				if [ "$?" = "0" ]; then
-					tr=$((tr+1))
-				else
-					tf=$((tr+1))
-				fi
+				[ "$?" = "0" ] && tr=$((tr+1)) || tf=$((tr+1))
+			elif [ -z "$d" ]; then
+				echo -ne "adding: '$x'\n"
+				echo "${h[@]}">>~/removed.sum
+				ta=$((ta+1))
 			fi
 		fi
-	done< <( find $@ -type f )
+	done< <(find "$@" -type f)
 	echo -ne "\n\n">>~/removed.log
+
 }
 
-stats ()
+_stats()
 {
-	printf "total checked: $tc\n"
-	printf "total added: $ta\n"
-	printf "total removed: $tr\n"
-	printf "total failed remove: $tf\n"
+
+	echo -e "total checked: $tc\ntotal added: $ta\ntotal removed: $tr\ntotal failed remove: $tf"
+
 }
 
+_test()
+{
 
-config $@
-sum $@
-stats
+	echo "generating test..."
+	mkdir -p "test"
+	f=("file 1 of 3.txt" "file 2 of 3.txt" "file 3 of 3.txt")
+for x in "${f[@]}"; do
+	echo "writting into: ./test/$x"
+	shuf -ren 500 "dummy text">"./test/$x"
+done
+
+}
+
+_config "$@"
