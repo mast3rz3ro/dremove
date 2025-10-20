@@ -44,7 +44,7 @@ _sum()
 	while read x; do
 			if [ -s "$x" ]; then
 				echo "generating hash: '$x'"
-				h=($(md5sum "$x")); tf=$((tf+1))
+				h=($(md5sum "$x")) && [ ${#h[0]} -eq 32 ] && tf=$((tf+1)) || { echo "hashing failed file: $x" | tee -a "$g"; exit 1; }
 			else
 				echo "error cannot read: $x" | tee -a "$g"
 				te=$((te+1)); continue
